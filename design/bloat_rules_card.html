@@ -1,0 +1,106 @@
+
+<style>
+  body { margin: 0; }
+  .rules { font-family: 'Space Mono', monospace; padding: 24px 20px; }
+  .game-title { font-size: 32px; font-weight: 700; color: var(--color-text-primary); letter-spacing: 0.08em; margin-bottom: 4px; }
+  .subtitle { font-size: 12px; color: var(--color-text-tertiary); letter-spacing: 0.15em; text-transform: uppercase; margin-bottom: 28px; }
+  .rule-block { border-left: 3px solid var(--color-border-tertiary); padding: 0 0 0 16px; margin-bottom: 24px; }
+  .rule-block.acid { border-color: #c8ff00; }
+  .rule-block.blood { border-color: #ff2b2b; }
+  .rule-block.white { border-color: var(--color-border-secondary); }
+  .rule-num { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--color-text-tertiary); margin-bottom: 5px; }
+  .rule-num.acid { color: #7a9e00; }
+  .rule-num.blood { color: #cc2222; }
+  .rule-title { font-size: 15px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 6px; }
+  .rule-body { font-size: 13px; color: var(--color-text-secondary); line-height: 1.75; }
+  .rule-body strong { color: var(--color-text-primary); font-weight: 700; }
+  .divider { border: none; border-top: 1px solid var(--color-border-tertiary); margin: 28px 0; }
+  .controls-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; }
+  .key { font-weight: 700; color: var(--color-text-primary); white-space: nowrap; }
+  .key-desc { color: var(--color-text-secondary); }
+  .win-lose { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px; }
+  .wl-card { background: var(--color-background-secondary); border-radius: 8px; padding: 12px 14px; border: 0.5px solid var(--color-border-tertiary); }
+  .wl-label { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 6px; }
+  .wl-label.survive { color: #7a9e00; }
+  .wl-label.die { color: #cc2222; }
+  .wl-item { font-size: 12px; color: var(--color-text-secondary); line-height: 1.7; }
+</style>
+
+<div class="rules">
+  <div class="game-title">BLOAT</div>
+  <div class="subtitle">Rules reference</div>
+
+  <div class="rule-block white">
+    <div class="rule-num">The basic idea</div>
+    <div class="rule-title">You are a circle. Your score is a tail.</div>
+    <div class="rule-body">
+      Move around the arena and collect glowing pickups. Each pickup adds <strong>one segment</strong> to a chain trailing behind you — your score made physical. The longer your tail, the higher your score multiplier, and the harder you are to control.
+    </div>
+  </div>
+
+  <div class="rule-block acid">
+    <div class="rule-num acid">Movement</div>
+    <div class="rule-title">The more you collect, the worse you turn.</div>
+    <div class="rule-body">
+      Your movement speed never changes. But your <strong>turning speed degrades</strong> with every segment added. At zero segments you can spin on the spot. At 25+ segments, you are steering a freight train — you have to start turning long before you need to change direction. Plan your arcs early.
+    </div>
+  </div>
+
+  <div class="rule-block blood">
+    <div class="rule-num blood">Enemies</div>
+    <div class="rule-title">They don't just want your head.</div>
+    <div class="rule-body">
+      <strong>Chasers (red circles)</strong> — home toward your nearest segment, not your head. If one hits your body, it <strong>tears off everything behind the impact point</strong> — you lose that score, but survive. If one hits your <strong>head</strong>, you die instantly.<br><br>
+      <strong>Cutters (acid diamonds)</strong> — appear after 90 seconds. They aim specifically for the <strong>middle</strong> of your chain to bisect it, denying you the multiplier. Appear rarely at first, then more often.
+    </div>
+  </div>
+
+  <div class="rule-block acid">
+    <div class="rule-num acid">Scoring</div>
+    <div class="rule-title">Risk and reward are the same number.</div>
+    <div class="rule-body">
+      Each pickup is worth <strong>base value × your current segment count</strong>. Zero segments = 1× value. 30 segments = 30× value. The multiplier resets whenever you shed or lose segments to an enemy. There is no cap.
+    </div>
+  </div>
+
+  <div class="rule-block white">
+    <div class="rule-num">Shed — [ space ]</div>
+    <div class="rule-title">You can sacrifice your score to survive.</div>
+    <div class="rule-body">
+      Press <strong>Space</strong> to detach the back half of your tail. You instantly regain turning ability. But the dropped segments <strong>don't disappear</strong> — they freeze in place as solid obstacles for 3 seconds. You just rebuilt the maze around yourself. 4 second cooldown. Minimum 6 segments required.
+    </div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="rule-num" style="margin-bottom:12px">Controls</div>
+  <div class="controls-grid">
+    <div class="key">← → / A D</div><div class="key-desc">Turn left / right</div>
+    <div class="key">↑ ↓ / W S</div><div class="key-desc">No effect — speed is fixed</div>
+    <div class="key">Space</div><div class="key-desc">Shed (sacrifice back half of tail)</div>
+    <div class="key">R</div><div class="key-desc">Restart after death</div>
+  </div>
+
+  <hr class="divider">
+
+  <div class="rule-num" style="margin-bottom:12px">Survive vs die</div>
+  <div class="win-lose">
+    <div class="wl-card">
+      <div class="wl-label survive">You survive if...</div>
+      <div class="wl-item">
+        — enemies hit your body (not head)<br>
+        — you shed before getting cornered<br>
+        — you avoid your own ghost segments
+      </div>
+    </div>
+    <div class="wl-card">
+      <div class="wl-label die">You die if...</div>
+      <div class="wl-item">
+        — any enemy touches your head<br>
+        — you run into your own shed obstacle<br>
+        — you get cornered with no room to turn
+      </div>
+    </div>
+  </div>
+
+</div>

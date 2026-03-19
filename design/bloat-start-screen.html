@@ -1,0 +1,524 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BLOAT — Start Screen</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        font-family: 'Space Mono', monospace;
+        overflow: hidden;
+        cursor: crosshair;
+      }
+
+      /* scanlines */
+      body::after {
+        content: '';
+        position: fixed;
+        inset: 0;
+        background: repeating-linear-gradient(
+          0deg,
+          transparent,
+          transparent 2px,
+          rgba(0, 0, 0, 0.15) 2px,
+          rgba(0, 0, 0, 0.15) 4px
+        );
+        pointer-events: none;
+        z-index: 100;
+      }
+
+      canvas#bg {
+        position: fixed;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+      }
+
+      /* ── GAME WINDOW FRAME ── */
+      .frame {
+        position: relative;
+        width: 960px;
+        height: 720px;
+        border: 1px solid #2e2e2e;
+        overflow: hidden;
+        background: #0a0a0a;
+        flex-shrink: 0;
+      }
+
+      /* corner tick marks */
+      /* .frame::before, .frame::after {
+    content: '';
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: #c8ff00;
+    border-style: solid;
+    z-index: 10;
+  }
+  .frame::before { top: 12px; left: 12px; border-width: 2px 0 0 2px; }
+  .frame::after  { bottom: 12px; right: 12px; border-width: 0 2px 2px 0; }
+
+  .corner-tr, .corner-bl {
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: #c8ff00;
+    border-style: solid;
+    z-index: 10;
+  }
+  .corner-tr { top: 12px; right: 12px; border-width: 2px 2px 0 0; }
+  .corner-bl { bottom: 12px; left: 12px; border-width: 0 0 2px 2px; } */
+
+      /* ── CONTENT ── */
+      .content {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 5;
+      }
+
+      /* high score strip — top */
+      .top-strip {
+        position: absolute;
+        width: 100%;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 36px;
+        border-bottom: 1px solid #1e1e1e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        justify-content: space-between;
+        padding: 0 24px;
+      }
+      .top-label {
+        font-size: 10px;
+        letter-spacing: 0.3em;
+        color: #3a3a3a;
+        text-transform: uppercase;
+        width: 100%;
+      }
+      .top-score {
+        font-size: 13px;
+        font-weight: 700;
+        color: #c8ff00;
+        letter-spacing: 0.1em;
+      }
+
+      /* jam tag */
+      .jam-tag {
+        font-size: 10px;
+        letter-spacing: 0.3em;
+        color: #c8ff00;
+        text-transform: uppercase;
+        margin-bottom: 16px;
+        opacity: 0;
+        animation: fadeUp 0.5s 0.2s ease forwards;
+      }
+
+      /* title */
+      .title {
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 200px;
+        line-height: 0.85;
+        color: #f0ede6;
+        letter-spacing: -0.01em;
+        position: relative;
+        opacity: 0;
+        animation: fadeUp 0.5s 0.35s ease forwards;
+      }
+
+      /* glitch layers */
+      .title-wrap {
+        position: relative;
+        display: inline-block;
+      }
+      .title-wrap::before {
+        content: 'BLOAT';
+        position: absolute;
+        inset: 0;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 200px;
+        line-height: 0.85;
+        color: #ff2b2b;
+        clip-path: polygon(0 32%, 100% 32%, 100% 46%, 0 46%);
+        animation: glitch1 5s infinite;
+      }
+      .title-wrap::after {
+        content: 'BLOAT';
+        position: absolute;
+        inset: 0;
+        font-family: 'Bebas Neue', sans-serif;
+        font-size: 200px;
+        line-height: 0.85;
+        color: #c8ff00;
+        clip-path: polygon(0 62%, 100% 62%, 100% 74%, 0 74%);
+        animation: glitch2 5s infinite;
+      }
+
+      @keyframes glitch1 {
+        0%,
+        88%,
+        100% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+        89% {
+          transform: translateX(-5px);
+          opacity: 1;
+        }
+        91% {
+          transform: translateX(4px);
+          opacity: 1;
+        }
+        93% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+      }
+      @keyframes glitch2 {
+        0%,
+        90%,
+        100% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+        91% {
+          transform: translateX(5px);
+          opacity: 1;
+        }
+        94% {
+          transform: translateX(-3px);
+          opacity: 1;
+        }
+        96% {
+          transform: translateX(0);
+          opacity: 0;
+        }
+      }
+
+      /* tagline */
+      .tagline {
+        font-size: 13px;
+        color: rgba(240, 237, 230, 0.4);
+        letter-spacing: 0.12em;
+        margin-top: 20px;
+        text-align: center;
+        line-height: 1.8;
+        opacity: 0;
+        animation: fadeUp 0.5s 0.5s ease forwards;
+      }
+      .tagline span {
+        color: #c8ff00;
+      }
+
+      /* demo snake */
+      .snake-demo {
+        display: flex;
+        align-items: center;
+        gap: 0;
+        margin: 32px 0 28px;
+        opacity: 0;
+        animation: fadeUp 0.5s 0.65s ease forwards;
+      }
+      .s-head {
+        width: 22px;
+        height: 22px;
+        background: #f0ede6;
+        border-radius: 50%;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 2;
+      }
+      .s-head::after {
+        content: '';
+        position: absolute;
+        width: 7px;
+        height: 7px;
+        background: #0a0a0a;
+        border-radius: 50%;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -60%);
+      }
+      .s-seg {
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        margin-left: -3px;
+        flex-shrink: 0;
+        border: 1px solid rgba(200, 255, 0, 0.2);
+      }
+      .s-label {
+        font-size: 10px;
+        color: #3a3a3a;
+        letter-spacing: 0.15em;
+        text-transform: uppercase;
+        margin-left: 14px;
+        white-space: nowrap;
+      }
+
+      /* press to play */
+      .press-play {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+        color: #0a0a0a;
+        background: #c8ff00;
+        padding: 14px 40px;
+        clip-path: polygon(
+          0 0,
+          calc(100% - 10px) 0,
+          100% 10px,
+          100% 100%,
+          10px 100%,
+          0 calc(100% - 10px)
+        );
+        opacity: 0;
+        animation:
+          fadeUp 0.5s 0.8s ease forwards,
+          blink-btn 1.8s 1.3s ease-in-out infinite;
+      }
+      @keyframes blink-btn {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.7;
+        }
+      }
+
+      /* controls hint */
+      .controls-hint {
+        position: absolute;
+        bottom: 48px;
+        left: 20px;
+        display: flex;
+        gap: 28px;
+        opacity: 0;
+        animation: fadeUp 0.5s 1s ease forwards;
+      }
+      .ctrl {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 5px;
+      }
+      .ctrl-key {
+        font-size: 11px;
+        font-weight: 700;
+        color: #f0ede6;
+        border: 1px solid #2e2e2e;
+        padding: 3px 10px;
+        letter-spacing: 0.1em;
+      }
+      .ctrl-label {
+        font-size: 10px;
+        color: #3a3a3a;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+
+      /* version tag */
+      .version {
+        position: absolute;
+        bottom: 14px;
+        right: 24px;
+        font-size: 10px;
+        color: #2a2a2a;
+        letter-spacing: 0.15em;
+      }
+
+      /* bottom ticker */
+      .ticker {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 28px;
+        background: #111;
+        border-top: 1px solid #1e1e1e;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ticker-inner {
+        white-space: nowrap;
+        font-size: 10px;
+        letter-spacing: 0.2em;
+        color: #2e2e2e;
+        animation: ticker 20s linear infinite;
+      }
+      /* @keyframes ticker {
+        from {
+          transform: translateX(100vw);
+        }
+        to {
+          transform: translateX(-100%);
+        }
+      } */
+
+      @keyframes fadeUp {
+        from {
+          opacity: 0;
+          transform: translateY(16px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="bg"></canvas>
+
+    <div class="frame">
+      <div class="corner-tr"></div>
+      <div class="corner-bl"></div>
+
+      <div class="top-strip">
+        <!-- <span class="top-label">High score</span> -->
+        <!-- <span class="top-score">—</span> -->
+        <span class="top-label">Game jam · theme: growing</span>
+      </div>
+
+      <div class="content">
+        <div class="jam-tag">arcade survival</div>
+
+        <div class="title">
+          <div class="title-wrap">BLOAT</div>
+        </div>
+
+        <p class="tagline">
+          your score is <span>physical</span> · it drags behind you<br />
+          the more you earn · the harder it gets
+        </p>
+
+        <!-- snake body preview -->
+        <div class="snake-demo" id="snakeDemo"></div>
+
+        <div class="press-play">press space to play</div>
+      </div>
+
+      <div class="controls-hint">
+        <div class="ctrl">
+          <div class="ctrl-key">← →</div>
+          <div class="ctrl-label">Turn</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-key">SPACE</div>
+          <div class="ctrl-label">Shed</div>
+        </div>
+        <div class="ctrl">
+          <div class="ctrl-key">R</div>
+          <div class="ctrl-label">Restart</div>
+        </div>
+      </div>
+
+      <div class="version">v0.1 · jam build</div>
+
+      <div class="ticker">
+        <div class="ticker-inner">
+          GROW YOUR SCORE &nbsp;✦&nbsp; LOSE YOUR SPEED &nbsp;✦&nbsp; SHED TO
+          SURVIVE &nbsp;✦&nbsp; ENEMIES TARGET YOUR BODY &nbsp; &nbsp;✦&nbsp;
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // ── BACKGROUND PARTICLE FIELD ──
+      const canvas = document.getElementById('bg');
+      const ctx = canvas.getContext('2d');
+      let W, H;
+      function resize() {
+        W = canvas.width = window.innerWidth;
+        H = canvas.height = window.innerHeight;
+      }
+      resize();
+      window.addEventListener('resize', resize);
+
+      const dots = Array.from({ length: 55 }, () => ({
+        x: Math.random() * 1200,
+        y: Math.random() * 800,
+        r: Math.random() * 2 + 1,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        a: Math.random() * 0.12 + 0.02,
+        acid: Math.random() < 0.07,
+      }));
+
+      (function loop() {
+        requestAnimationFrame(loop);
+        ctx.clearRect(0, 0, W, H);
+        for (const d of dots) {
+          d.x += d.vx;
+          d.y += d.vy;
+          if (d.x < 0) d.x = W;
+          if (d.x > W) d.x = 0;
+          if (d.y < 0) d.y = H;
+          if (d.y > H) d.y = 0;
+          ctx.beginPath();
+          ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+          ctx.fillStyle = d.acid
+            ? `rgba(200,255,0,${d.a})`
+            : `rgba(240,237,230,${d.a})`;
+          ctx.fill();
+        }
+      })();
+
+      // ── SNAKE DEMO ──
+      const demo = document.getElementById('snakeDemo');
+      const head = document.createElement('div');
+      head.className = 's-head';
+      demo.appendChild(head);
+
+      const segColors = [
+        [200, 255, 0],
+        [190, 240, 0],
+        [175, 220, 0],
+        [155, 200, 0],
+        [135, 175, 0],
+        [115, 150, 0],
+        [95, 125, 0],
+        [80, 105, 0],
+        [65, 88, 0],
+        [50, 70, 0],
+        [40, 55, 0],
+        [30, 42, 0],
+      ];
+      segColors.forEach(([r, g, b], i) => {
+        const s = document.createElement('div');
+        s.className = 's-seg';
+        const t = i / (segColors.length - 1);
+        s.style.background = `rgba(${r},${g},${b},${0.85 - t * 0.55})`;
+        demo.appendChild(s);
+      });
+
+      const label = document.createElement('div');
+      label.className = 's-label';
+      label.textContent = `${segColors.length} segments = ${segColors.length}× multiplier`;
+      demo.appendChild(label);
+    </script>
+  </body>
+</html>

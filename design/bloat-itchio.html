@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOAT — game jam</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --black: #0a0a0a;
+    --white: #f0ede6;
+    --acid: #c8ff00;
+    --blood: #ff2b2b;
+    --dim: #1a1a1a;
+    --mid: #2e2e2e;
+  }
+
+  body {
+    background: var(--black);
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    overflow-x: hidden;
+    cursor: crosshair;
+  }
+
+  /* ── SCANLINE OVERLAY ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.18) 2px,
+      rgba(0,0,0,0.18) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+    padding: 60px 24px 80px;
+  }
+
+  /* animated arena background */
+  #arena-canvas {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .hero-content {
+    position: relative;
+    z-index: 10;
+    text-align: center;
+  }
+
+  .game-jam-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--acid);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    animation: fadeUp 0.6s ease both;
+  }
+
+  .title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(120px, 22vw, 260px);
+    line-height: 0.85;
+    letter-spacing: -0.02em;
+    color: var(--white);
+    position: relative;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+
+  .title-inner {
+    position: relative;
+    display: inline-block;
+  }
+
+  /* glitch effect on title */
+  .title-inner::before,
+  .title-inner::after {
+    content: 'BLOAT';
+    position: absolute;
+    inset: 0;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: inherit;
+    line-height: inherit;
+  }
+  .title-inner::before {
+    color: var(--blood);
+    clip-path: polygon(0 30%, 100% 30%, 100% 50%, 0 50%);
+    animation: glitch1 4s infinite;
+  }
+  .title-inner::after {
+    color: var(--acid);
+    clip-path: polygon(0 60%, 100% 60%, 100% 75%, 0 75%);
+    animation: glitch2 4s infinite;
+  }
+
+  @keyframes glitch1 {
+    0%, 90%, 100% { transform: translateX(0); opacity: 0; }
+    91% { transform: translateX(-4px); opacity: 1; }
+    93% { transform: translateX(3px); opacity: 1; }
+    95% { transform: translateX(0); opacity: 0; }
+  }
+  @keyframes glitch2 {
+    0%, 92%, 100% { transform: translateX(0); opacity: 0; }
+    93% { transform: translateX(4px); opacity: 1; }
+    96% { transform: translateX(-2px); opacity: 1; }
+    98% { transform: translateX(0); opacity: 0; }
+  }
+
+  .tagline {
+    font-size: clamp(12px, 1.8vw, 16px);
+    color: rgba(240,237,230,0.5);
+    letter-spacing: 0.08em;
+    margin-top: 18px;
+    margin-bottom: 36px;
+    max-width: 480px;
+    line-height: 1.7;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+
+  .tagline em {
+    color: var(--acid);
+    font-style: normal;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 14px;
+    justify-content: center;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.3s ease both;
+  }
+
+  .btn-primary {
+    background: var(--acid);
+    color: var(--black);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 14px 32px;
+    border: none;
+    cursor: crosshair;
+    text-decoration: none;
+    display: inline-block;
+    transition: transform 0.1s, background 0.1s;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  }
+  .btn-primary:hover {
+    background: #dfff00;
+    transform: translate(-2px, -2px);
+  }
+
+  .btn-secondary {
+    background: transparent;
+    color: var(--white);
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 13px 28px;
+    border: 1px solid rgba(240,237,230,0.25);
+    cursor: crosshair;
+    text-decoration: none;
+    display: inline-block;
+    transition: border-color 0.1s, color 0.1s;
+  }
+  .btn-secondary:hover {
+    border-color: var(--white);
+    color: var(--acid);
+  }
+
+  /* scroll indicator */
+  .scroll-hint {
+    position: absolute;
+    bottom: 28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 11px;
+    letter-spacing: 0.2em;
+    color: rgba(240,237,230,0.3);
+    animation: pulse 2s infinite;
+    z-index: 10;
+  }
+  @keyframes pulse { 0%,100%{opacity:0.3} 50%{opacity:0.7} }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── MECHANIC STRIP ── */
+  .mechanic-strip {
+    background: var(--acid);
+    color: var(--black);
+    padding: 14px 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+  .mechanic-strip-inner {
+    display: inline-block;
+    animation: ticker 18s linear infinite;
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.1em;
+  }
+  @keyframes ticker {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* ── SECTIONS ── */
+  section {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 80px 24px;
+  }
+
+  .section-label {
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    color: var(--acid);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  h2 {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(42px, 7vw, 72px);
+    line-height: 0.95;
+    margin-bottom: 28px;
+    letter-spacing: 0.02em;
+  }
+
+  p {
+    font-size: 14px;
+    line-height: 1.9;
+    color: rgba(240,237,230,0.65);
+    max-width: 600px;
+  }
+
+  p strong {
+    color: var(--white);
+    font-weight: 700;
+  }
+
+  p + p { margin-top: 16px; }
+
+  /* ── MECHANICS GRID ── */
+  .mechanics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1px;
+    background: var(--mid);
+    border: 1px solid var(--mid);
+    margin-top: 56px;
+  }
+
+  .mech-card {
+    background: var(--black);
+    padding: 28px 24px;
+    transition: background 0.15s;
+  }
+  .mech-card:hover { background: var(--dim); }
+
+  .mech-number {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 48px;
+    color: var(--mid);
+    line-height: 1;
+    margin-bottom: 12px;
+    transition: color 0.15s;
+  }
+  .mech-card:hover .mech-number { color: var(--acid); }
+
+  .mech-title {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--white);
+    margin-bottom: 8px;
+  }
+
+  .mech-desc {
+    font-size: 12px;
+    line-height: 1.7;
+    color: rgba(240,237,230,0.45);
+    max-width: none;
+  }
+
+  /* ── SCORE VISUALIZER ── */
+  .viz-section {
+    background: var(--dim);
+    padding: 64px 24px;
+  }
+  .viz-inner {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .viz-demo {
+    margin-top: 40px;
+    background: var(--black);
+    border: 1px solid var(--mid);
+    padding: 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+  }
+
+  .body-viz {
+    display: flex;
+    align-items: center;
+    gap: 0;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    max-width: 100%;
+  }
+
+  .head-seg {
+    width: 28px; height: 28px;
+    background: var(--white);
+    border-radius: 50%;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  .body-seg {
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-left: -4px;
+    border: 1px solid rgba(240,237,230,0.15);
+    transition: all 0.3s;
+  }
+
+  .controls-row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
+  }
+
+  .viz-label {
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: rgba(240,237,230,0.4);
+    text-align: center;
+  }
+
+  .stat-row {
+    display: flex; gap: 32px; justify-content: center; flex-wrap: wrap;
+  }
+
+  .stat {
+    text-align: center;
+  }
+  .stat-val {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 36px;
+    line-height: 1;
+    color: var(--acid);
+    transition: color 0.3s;
+  }
+  .stat-val.danger { color: var(--blood); }
+  .stat-key {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(240,237,230,0.35);
+    text-transform: uppercase;
+    margin-top: 4px;
+  }
+
+  /* ── THEME / JAM INFO ── */
+  .theme-band {
+    background: var(--blood);
+    padding: 32px 24px;
+    text-align: center;
+  }
+  .theme-band .label {
+    font-size: 10px;
+    letter-spacing: 0.35em;
+    color: rgba(240,237,230,0.6);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .theme-band .theme-word {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: clamp(40px, 8vw, 80px);
+    letter-spacing: 0.05em;
+    line-height: 1;
+    color: var(--white);
+  }
+  .theme-band .theme-note {
+    font-size: 12px;
+    color: rgba(240,237,230,0.6);
+    margin-top: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  /* ── FOOTER ── */
+  footer {
+    border-top: 1px solid var(--mid);
+    padding: 32px 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    max-width: 900px;
+    margin: 0 auto;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  footer .foot-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 22px;
+    letter-spacing: 0.1em;
+  }
+  footer .foot-meta {
+    font-size: 11px;
+    color: rgba(240,237,230,0.3);
+    letter-spacing: 0.1em;
+  }
+</style>
+</head>
+<body>
+
+<!-- ── HERO ── -->
+<section class="hero">
+  <canvas id="arena-canvas"></canvas>
+  <div class="hero-content">
+    <div class="game-jam-label">↗ game jam entry · theme: growing</div>
+    <h1 class="title"><span class="title-inner">BLOAT</span></h1>
+    <p class="tagline">
+      Your score is <em>physical</em>. It drags behind you.<br>
+      The more you earn, the harder it is to survive.
+    </p>
+    <div class="cta-row">
+      <a href="#" class="btn-primary">Play in browser</a>
+      <a href="#how-it-works" class="btn-secondary">How it works</a>
+    </div>
+  </div>
+  <div class="scroll-hint">↓ scroll</div>
+</section>
+
+<!-- ── TICKER ── -->
+<div class="mechanic-strip">
+  <div class="mechanic-strip-inner">
+    GROW YOUR SCORE &nbsp;✦&nbsp; LOSE YOUR SPEED &nbsp;✦&nbsp; SHED TO SURVIVE &nbsp;✦&nbsp; ENEMIES TARGET YOUR BODY &nbsp;✦&nbsp; THE LONGER YOU LAST THE WORSE IT GETS &nbsp;✦&nbsp; GROW YOUR SCORE &nbsp;✦&nbsp; LOSE YOUR SPEED &nbsp;✦&nbsp; SHED TO SURVIVE &nbsp;✦&nbsp; ENEMIES TARGET YOUR BODY &nbsp;✦&nbsp; THE LONGER YOU LAST THE WORSE IT GETS &nbsp;✦&nbsp;
+  </div>
+</div>
+
+<!-- ── ABOUT ── -->
+<section id="how-it-works">
+  <div class="section-label">// what is this</div>
+  <h2>Your score is<br>your enemy.</h2>
+  <p>
+    <strong>BLOAT</strong> is an arcade survival game where every point you collect grows a physical body attached to you. Not a number. Not a bar. A real chain of segments that trails behind your every move.
+  </p>
+  <p>
+    The body widens your turning radius. It draws enemy fire. It blocks your own escape routes. <strong>The better you play, the worse your situation becomes.</strong>
+  </p>
+  <p>
+    At any moment you can <strong>shed</strong> — release half your body to buy speed. The discarded segments harden into obstacles for 3 seconds before dissolving. You escape one problem and create another.
+  </p>
+
+  <div class="mechanics-grid">
+    <div class="mech-card">
+      <div class="mech-number">01</div>
+      <div class="mech-title">Collect</div>
+      <div class="mech-desc">Pickups always spawn in dangerous positions. Never free. Never safe. Never optional if you want to survive long enough to matter.</div>
+    </div>
+    <div class="mech-card">
+      <div class="mech-number">02</div>
+      <div class="mech-title">Bloat</div>
+      <div class="mech-desc">Each pickup adds one segment. Your turn radius degrades. At 30+ segments you're planning 3 seconds ahead — or dying.</div>
+    </div>
+    <div class="mech-card">
+      <div class="mech-number">03</div>
+      <div class="mech-title">Multiply</div>
+      <div class="mech-desc">Score multiplier = current segment count. 40 segments means 40× points per pickup. Risk and reward are the same thing.</div>
+    </div>
+    <div class="mech-card">
+      <div class="mech-number">04</div>
+      <div class="mech-title">Shed</div>
+      <div class="mech-desc">Sacrifice the back half. Regain your turn. But the dropped segments become walls. You just rebuilt the maze around yourself.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── INTERACTIVE DEMO ── -->
+<div class="viz-section">
+  <div class="viz-inner">
+    <div class="section-label">// feel the weight</div>
+    <h2 style="font-family:'Bebas Neue',sans-serif;font-size:clamp(42px,7vw,72px);line-height:0.95;margin-bottom:8px;">Drag the slider.<br>Watch it get worse.</h2>
+
+    <div class="viz-demo">
+      <div class="stat-row">
+        <div class="stat">
+          <div class="stat-val" id="seg-count">0</div>
+          <div class="stat-key">Segments</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="turn-stat">100%</div>
+          <div class="stat-key">Turn speed</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="mult-stat">1×</div>
+          <div class="stat-key">Multiplier</div>
+        </div>
+        <div class="stat">
+          <div class="stat-val" id="danger-stat">low</div>
+          <div class="stat-key">Danger</div>
+        </div>
+      </div>
+
+      <div class="body-viz" id="body-viz">
+        <div class="head-seg"></div>
+      </div>
+
+      <div class="viz-label" id="viz-label">no segments — free as a bird</div>
+
+      <div class="controls-row">
+        <input type="range" min="0" max="40" value="0" id="seg-slider" style="width:260px">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── JAM THEME BAND ── -->
+<div class="theme-band">
+  <div class="label">Jam theme</div>
+  <div class="theme-word">GROWING</div>
+  <div class="theme-note">Everything you grow makes you more vulnerable. That's the whole game.</div>
+</div>
+
+<!-- ── CONTROLS ── -->
+<section>
+  <div class="section-label">// controls</div>
+  <h2>Simple.<br>Punishing.</h2>
+  <p>
+    <strong>WASD / Arrow keys</strong> — move<br>
+    <strong>Space</strong> — shed (4s cooldown, min 6 segments)<br>
+    <strong>That's it.</strong>
+  </p>
+  <p style="margin-top:24px">
+    Built solo in 72 hours for a game jam. No save system. No tutorial. The mechanic is the tutorial.
+  </p>
+  <div style="margin-top:36px">
+    <a href="#" class="btn-primary">Play now — free</a>
+  </div>
+</section>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="foot-title">BLOAT</div>
+  <div class="foot-meta">solo jam entry · theme: growing · 72hrs · browser playable</div>
+</footer>
+
+<!-- ── ARENA ANIMATION ── -->
+<script>
+const canvas = document.getElementById('arena-canvas');
+const ctx = canvas.getContext('2d');
+
+let W, H;
+function resize() {
+  W = canvas.width = canvas.offsetWidth;
+  H = canvas.height = canvas.offsetHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+const ACID = '#c8ff00';
+const BLOOD = '#ff2b2b';
+const WHITE = 'rgba(240,237,230,';
+
+class Particle {
+  constructor() { this.reset(true); }
+  reset(init) {
+    this.x = Math.random() * W;
+    this.y = init ? Math.random() * H : (Math.random() > 0.5 ? -20 : H + 20);
+    this.r = Math.random() * 5 + 2;
+    this.vx = (Math.random() - 0.5) * 0.4;
+    this.vy = (Math.random() - 0.5) * 0.4;
+    this.alpha = Math.random() * 0.2 + 0.03;
+    this.color = Math.random() < 0.08 ? ACID : Math.random() < 0.05 ? BLOOD : WHITE + this.alpha + ')';
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy;
+    if (this.x < -20 || this.x > W+20 || this.y < -20 || this.y > H+20) this.reset(false);
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.r, 0, Math.PI*2);
+    ctx.fillStyle = this.color;
+    ctx.fill();
+  }
+}
+
+// Demo snake
+const snake = { x: 0, y: 0, angle: 0, segments: [], len: 22, speed: 1.4 };
+function initSnake() {
+  snake.x = W * 0.5; snake.y = H * 0.5;
+  snake.angle = Math.random() * Math.PI * 2;
+  snake.segments = [];
+  for (let i = 0; i < snake.len; i++) {
+    snake.segments.push({ x: snake.x - Math.cos(snake.angle)*i*14, y: snake.y - Math.sin(snake.angle)*i*14 });
+  }
+}
+
+let angleTarget = 0;
+let angleTimer = 0;
+
+const particles = Array.from({length: 60}, () => new Particle());
+
+let frame = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  ctx.clearRect(0,0,W,H);
+
+  // particles
+  for (const p of particles) { p.update(); p.draw(); }
+
+  // move snake
+  angleTimer--;
+  if (angleTimer <= 0) {
+    angleTarget = snake.angle + (Math.random() - 0.5) * 2.2;
+    angleTimer = 40 + Math.random() * 60;
+  }
+  const da = ((angleTarget - snake.angle + Math.PI * 3) % (Math.PI*2)) - Math.PI;
+  snake.angle += Math.max(-0.04, Math.min(0.04, da));
+  snake.x += Math.cos(snake.angle) * snake.speed;
+  snake.y += Math.sin(snake.angle) * snake.speed;
+
+  // bounce
+  const pad = 60;
+  if (snake.x < pad) snake.angle = 0;
+  if (snake.x > W-pad) snake.angle = Math.PI;
+  if (snake.y < pad) snake.angle = Math.PI*0.5;
+  if (snake.y > H-pad) snake.angle = -Math.PI*0.5;
+
+  snake.segments.unshift({x: snake.x, y: snake.y});
+  if (snake.segments.length > snake.len) snake.segments.pop();
+
+  // draw body
+  for (let i = snake.segments.length-1; i >= 0; i--) {
+    const t = i / snake.segments.length;
+    const r = i === 0 ? 10 : 7 - t*2;
+    const alpha = i === 0 ? 0.9 : 0.12 + (1-t)*0.25;
+    const color = i === 0 ? `rgba(240,237,230,${alpha})` : `rgba(200,255,0,${alpha})`;
+    ctx.beginPath();
+    ctx.arc(snake.segments[i].x, snake.segments[i].y, Math.max(2,r), 0, Math.PI*2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  // occasional enemy dot
+  if (frame % 180 === 0) {
+    particles.push(new Particle());
+    if (particles.length > 80) particles.shift();
+  }
+
+  frame++;
+}
+
+initSnake();
+loop();
+
+// ── INTERACTIVE DEMO SLIDER ──
+const slider = document.getElementById('seg-slider');
+const bodyViz = document.getElementById('body-viz');
+const segCount = document.getElementById('seg-count');
+const turnStat = document.getElementById('turn-stat');
+const multStat = document.getElementById('mult-stat');
+const dangerStat = document.getElementById('danger-stat');
+const vizLabel = document.getElementById('viz-label');
+
+const labels = [
+  [0, "no segments — free as a bird"],
+  [5, "getting heavy..."],
+  [12, "turns are getting sloppy"],
+  [20, "you're a liability to yourself"],
+  [30, "enemies love this for you"],
+  [40, "pray you never get here"],
+];
+
+function getLabel(v) {
+  let best = labels[0][1];
+  for (const [threshold, text] of labels) {
+    if (v >= threshold) best = text;
+  }
+  return best;
+}
+
+const DANGER_LEVELS = ['low','low','medium','medium','high','critical'];
+
+function updateViz(v) {
+  const turn = Math.round(100 / (1 + v * 0.04));
+  const mult = v;
+  const di = Math.min(5, Math.floor(v / 8));
+  const danger = DANGER_LEVELS[di];
+
+  segCount.textContent = v;
+  turnStat.textContent = turn + '%';
+  multStat.textContent = (mult || 1) + '×';
+  dangerStat.textContent = danger;
+
+  const isRed = v >= 28;
+  turnStat.classList.toggle('danger', turn <= 40);
+  dangerStat.classList.toggle('danger', isRed);
+
+  vizLabel.textContent = getLabel(v);
+
+  // rebuild body viz
+  bodyViz.innerHTML = '<div class="head-seg"></div>';
+  for (let i = 0; i < v; i++) {
+    const seg = document.createElement('div');
+    seg.className = 'body-seg';
+    const t = i / Math.max(1, v - 1);
+    const r = Math.round(255 * t);
+    const g = Math.round(255 * (1 - t * 0.6));
+    seg.style.background = `rgb(${r},${g},0)`;
+    seg.style.opacity = 0.35 + (1 - t) * 0.55;
+    if (i > 26) { seg.style.display = 'none'; }
+    bodyViz.appendChild(seg);
+  }
+  if (v > 27) {
+    const more = document.createElement('span');
+    more.style.cssText = 'font-size:11px;color:rgba(240,237,230,0.3);letter-spacing:0.1em;margin-left:8px;white-space:nowrap;';
+    more.textContent = `+${v - 27} more`;
+    bodyViz.appendChild(more);
+  }
+}
+
+slider.addEventListener('input', () => updateViz(+slider.value));
+updateViz(0);
+</script>
+</body>
+</html>

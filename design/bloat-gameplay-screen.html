@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BLOAT — Gameplay Screen</title>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #050505;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Space Mono', monospace;
+    overflow: hidden;
+    cursor: crosshair;
+  }
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.12) 2px,rgba(0,0,0,0.12) 4px);
+    pointer-events: none;
+    z-index: 200;
+  }
+
+  .frame {
+    position: relative;
+    width: 960px;
+    height: 720px;
+    background: #0a0a0a;
+    border: 1px solid #1e1e1e;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  /* corner ticks */
+  .frame::before, .frame::after { content:''; position:absolute; width:16px; height:16px; border-color:#c8ff00; border-style:solid; z-index:50; }
+  .frame::before { top:8px; left:8px; border-width:1.5px 0 0 1.5px; }
+  .frame::after  { bottom:8px; right:8px; border-width:0 1.5px 1.5px 0; }
+  .c-tr,.c-bl { position:absolute; width:16px; height:16px; border-color:#c8ff00; border-style:solid; z-index:50; }
+  .c-tr { top:8px; right:8px; border-width:1.5px 1.5px 0 0; }
+  .c-bl { bottom:8px; left:8px; border-width:0 0 1.5px 1.5px; }
+
+  canvas#game { position:absolute; inset:0; width:100%; height:100%; }
+
+  /* ── HUD ── */
+  .hud { position:absolute; inset:0; pointer-events:none; z-index:10; }
+
+  /* top bar */
+  .hud-top {
+    position:absolute; top:0; left:0; right:0; height:48px;
+    border-bottom:1px solid #1a1a1a;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 20px;
+    background: rgba(10,10,10,0.85);
+  }
+  .score-block { display:flex; align-items:baseline; gap:8px; }
+  .score-val {
+    font-family:'Bebas Neue',sans-serif;
+    font-size:32px; color:#f0ede6; letter-spacing:0.05em; line-height:1;
+    transition: color 0.1s;
+  }
+  .score-val.flash { color:#c8ff00; }
+  .mult-badge {
+    font-size:12px; font-weight:700;
+    color:#0a0a0a; background:#c8ff00;
+    padding:2px 7px; letter-spacing:0.05em;
+  }
+  .hud-label { font-size:10px; letter-spacing:0.25em; color:#2e2e2e; text-transform:uppercase; }
+  .seg-count { font-size:13px; font-weight:700; color:#f0ede6; letter-spacing:0.1em; }
+  .seg-count.danger { color:#ff2b2b; }
+  .time-val { font-size:13px; color:#2e2e2e; letter-spacing:0.1em; }
+
+  /* bottom bar */
+  .hud-bottom {
+    position:absolute; bottom:0; left:0; right:0; height:42px;
+    border-top:1px solid #1a1a1a;
+    display:flex; align-items:center; justify-content:center;
+    gap:24px;
+    background: rgba(10,10,10,0.85);
+  }
+
+  /* shed bar */
+  .shed-wrap { display:flex; align-items:center; gap:10px; }
+  .shed-label { font-size:10px; letter-spacing:0.2em; color:#3a3a3a; text-transform:uppercase; white-space:nowrap; }
+  .shed-label.ready { color:#c8ff00; }
+  .shed-bar-track {
+    width:160px; height:5px;
+    background:#1a1a1a; position:relative; overflow:hidden;
+  }
+  .shed-bar-fill {
+    position:absolute; left:0; top:0; bottom:0;
+    background:#c8ff00;
+    transition: width 0.05s linear;
+  }
+  .shed-bar-fill.charging { background:#2e2e2e; }
+  .shed-key {
+    font-size:10px; font-weight:700; color:#f0ede6;
+    border:1px solid #2e2e2e; padding:2px 8px; letter-spacing:0.1em;
+    white-space:nowrap;
+  }
+
+  /* danger indicator */
+  .danger-indicator {
+    font-size:10px; font-weight:700; letter-spacing:0.2em;
+    text-transform:uppercase; padding:3px 10px;
+    border:1px solid transparent;
+    transition: all 0.3s;
+  }
+  .danger-indicator.low  { color:#2e2e2e; border-color:#1e1e1e; }
+  .danger-indicator.med  { color:#854f0b; border-color:#633806; }
+  .danger-indicator.high { color:#ff2b2b; border-color:#ff2b2b; animation: blink-danger 0.8s infinite; }
+  @keyframes blink-danger { 0%,100%{opacity:1} 50%{opacity:0.5} }
+
+  /* wave label */
+  .wave-val { font-size:10px; color:#2e2e2e; letter-spacing:0.2em; }
+
+  /* arena border glow when danger */
+  .arena-border {
+    position:absolute;
+    top:48px; left:0; right:0; bottom:42px;
+    border:1px solid #1e1e1e;
+    pointer-events:none;
+    transition: border-color 0.5s;
+  }
+  .arena-border.danger { border-color:rgba(255,43,43,0.3); }
+
+  /* pause overlay hint */
+  .pause-hint {
+    position:absolute; top:56px; right:16px;
+    font-size:10px; color:#1e1e1e; letter-spacing:0.15em;
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="c-tr"></div><div class="c-bl"></div>
+  <canvas id="game"></canvas>
+
+  <div class="hud">
+    <!-- top -->
+    <div class="hud-top">
+      <div class="score-block">
+        <div class="score-val" id="scoreVal">4,820</div>
+        <div class="mult-badge" id="multBadge">×14</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div class="hud-label">segments</div>
+        <div class="seg-count" id="segCount">14</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div class="hud-label">wave</div>
+        <div class="wave-val" id="waveVal">03</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px">
+        <div class="hud-label">time</div>
+        <div class="time-val" id="timeVal">01:24</div>
+      </div>
+    </div>
+
+    <!-- arena border -->
+    <div class="arena-border" id="arenaBorder"></div>
+
+    <div class="pause-hint">[ ESC ] pause</div>
+
+    <!-- bottom -->
+    <div class="hud-bottom">
+      <div class="danger-indicator low" id="dangerInd">danger: low</div>
+      <div class="shed-wrap">
+        <div class="shed-label" id="shedLabel">shed</div>
+        <div class="shed-bar-track">
+          <div class="shed-bar-fill" id="shedFill" style="width:100%"></div>
+        </div>
+        <div class="shed-key">space</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx    = canvas.getContext('2d');
+canvas.width  = 960;
+canvas.height = 720;
+
+const ARENA = { l:0, t:48, r:960, b:678 };
+const W = canvas.width, H = canvas.height;
+
+// ── COLORS ──
+const C = {
+  black:  '#0a0a0a',
+  white:  '#f0ede6',
+  acid:   '#c8ff00',
+  blood:  '#ff2b2b',
+  dim:    '#1a1a1a',
+  mid:    '#2e2e2e',
+  ghost:  'rgba(120,60,60,',
+};
+
+// ── PLAYER ──
+const player = {
+  x: 480, y: 380, angle: -60,
+  speed: 200,
+  segs: [],
+  alive: true,
+};
+
+// Build initial segment chain (mid-game state: 14 segs)
+const SEG_SPACING = 18;
+(function() {
+  let lx = player.x, ly = player.y;
+  const rad = Math.atan2(Math.sin(player.angle * Math.PI/180 + Math.PI), Math.cos(player.angle * Math.PI/180 + Math.PI));
+  for (let i = 0; i < 14; i++) {
+    lx += Math.cos(rad) * SEG_SPACING;
+    ly += Math.sin(rad) * SEG_SPACING;
+    player.segs.push({ x: lx, y: ly });
+  }
+})();
+
+// ── ENEMIES ──
+const enemies = [
+  { x: 720, y: 200, type: 'chaser' },
+  { x: 150, y: 500, type: 'chaser' },
+  { x: 860, y: 580, type: 'chaser' },
+  { x: 400, y: 140, type: 'cutter' },
+];
+
+// ── PICKUPS ──
+const pickups = [
+  { x: 820, y: 120, type: 'normal', t: 0 },
+  { x: 120, y: 300, type: 'double', t: 1.2 },
+  { x: 650, y: 560, type: 'normal', t: 2.1 },
+  { x: 300, y: 620, type: 'normal', t: 0.7 },
+  { x: 870, y: 400, type: 'normal', t: 3.0 },
+];
+
+// ── GHOST SEGMENTS ──
+const ghosts = [
+  { x: 320, y: 260, timer: 1.8, maxTimer: 3.0 },
+  { x: 338, y: 244, timer: 1.8, maxTimer: 3.0 },
+  { x: 355, y: 230, timer: 1.6, maxTimer: 3.0 },
+  { x: 370, y: 218, timer: 1.4, maxTimer: 3.0 },
+  { x: 383, y: 208, timer: 1.2, maxTimer: 3.0 },
+  { x: 395, y: 200, timer: 1.0, maxTimer: 3.0 },
+];
+
+// ── PARTICLES ──
+const particles = [];
+function burst(x, y, color, n=8) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const s = Math.random() * 120 + 40;
+    particles.push({ x, y, vx: Math.cos(a)*s, vy: Math.sin(a)*s, life: Math.random()*.5+.2, maxLife: 0, r: Math.random()*3+1, color });
+  }
+  particles[particles.length-1].maxLife = particles[particles.length-1].life;
+  // fix maxLife for all
+  for (const p of particles) if (!p.maxLife) p.maxLife = p.life;
+}
+
+// ── SIMULATION STATE ──
+let elapsed   = 84;   // start at 1:24 so we see wave 3
+let shedCD    = 0;
+let shedMax   = 4.0;
+let scoreDisp = 4820;
+let waveTimer = 0;
+let angleTarget = player.angle;
+let angleTimer  = 0;
+let autoPlay    = true;
+let scoreFlash  = 0;
+let lastPickupTime = 0;
+
+// ── MAIN LOOP ──
+let last = performance.now();
+function loop(now) {
+  requestAnimationFrame(loop);
+  const dt = Math.min((now - last) / 1000, 0.05);
+  last = now;
+  elapsed += dt;
+  waveTimer += dt;
+  scoreFlash = Math.max(0, scoreFlash - dt);
+  lastPickupTime += dt;
+
+  // auto-steer
+  angleTimer -= dt;
+  if (angleTimer <= 0) {
+    angleTarget = player.angle + (Math.random() - 0.5) * 180;
+    angleTimer  = 1.5 + Math.random() * 2;
+  }
+  const n = player.segs.length;
+  const turnSpeed = 200 / (1 + n * 0.038);
+  let da = ((angleTarget - player.angle + 540) % 360) - 180;
+  player.angle += Math.sign(da) * Math.min(Math.abs(da), turnSpeed * dt);
+  const rad = player.angle * Math.PI / 180;
+  player.x += Math.cos(rad) * player.speed * dt;
+  player.y += Math.sin(rad) * player.speed * dt;
+
+  // bounce off arena walls
+  const pad = 12;
+  if (player.x < ARENA.l + pad) { player.x = ARENA.l + pad; angleTarget = Math.random()*60; }
+  if (player.x > ARENA.r - pad) { player.x = ARENA.r - pad; angleTarget = 120 + Math.random()*60; }
+  if (player.y < ARENA.t + pad) { player.y = ARENA.t + pad; angleTarget = 60 + Math.random()*60; }
+  if (player.y > ARENA.b - pad) { player.y = ARENA.b - pad; angleTarget = -120 + Math.random()*60; }
+
+  // segment chain follow
+  let lx = player.x, ly = player.y;
+  for (const s of player.segs) {
+    const dx = s.x - lx, dy = s.y - ly;
+    const dist = Math.hypot(dx, dy);
+    if (dist > SEG_SPACING) { s.x = lx + dx/dist*SEG_SPACING; s.y = ly + dy/dist*SEG_SPACING; }
+    lx = s.x; ly = s.y;
+  }
+
+  // enemy movement (simple drift toward player)
+  for (const e of enemies) {
+    const tx = e.type === 'cutter' && player.segs.length > 0
+      ? player.segs[Math.floor(player.segs.length/2)].x
+      : player.x;
+    const ty = e.type === 'cutter' && player.segs.length > 0
+      ? player.segs[Math.floor(player.segs.length/2)].y
+      : player.y;
+    const dx = tx - e.x, dy = ty - e.y;
+    const d = Math.hypot(dx,dy)||1;
+    const spd = e.type === 'cutter' ? 100 : 70;
+    e.x += dx/d*spd*dt;
+    e.y += dy/d*spd*dt;
+    // keep in arena
+    e.x = Math.max(ARENA.l+10, Math.min(ARENA.r-10, e.x));
+    e.y = Math.max(ARENA.t+10, Math.min(ARENA.b-10, e.y));
+  }
+
+  // pickup pulse
+  for (const p of pickups) p.t += dt * 3;
+
+  // ghost segs fade
+  for (const g of ghosts) g.timer -= dt;
+
+  // shed cooldown
+  shedCD = Math.max(0, shedCD - dt);
+
+  // auto-shed occasionally
+  if (shedCD <= 0 && player.segs.length >= 8 && Math.random() < 0.004) {
+    const dropped = player.segs.splice(Math.floor(player.segs.length/2));
+    for (const s of dropped) ghosts.push({ x: s.x, y: s.y, timer: 3, maxTimer: 3 });
+    shedCD = shedMax;
+    burst(player.x, player.y, [200,255,0], 12);
+  }
+
+  // auto-collect pickup if close
+  if (lastPickupTime > 1.5) {
+    for (let i = pickups.length-1; i >= 0; i--) {
+      const p = pickups[i];
+      if (Math.hypot(player.x - p.x, player.y - p.y) < 28) {
+        const gain = 10 * (p.type === 'double' ? 2 : 1) * Math.max(1, player.segs.length);
+        scoreDisp += gain;
+        burst(p.x, p.y, [200,255,0], 8);
+        // add segment
+        const last = player.segs[player.segs.length-1] || player;
+        const prev = player.segs.length > 1 ? player.segs[player.segs.length-2] : player;
+        const ddx = last.x - prev.x, ddy = last.y - prev.y;
+        const dd = Math.hypot(ddx,ddy)||1;
+        player.segs.push({ x: last.x + ddx/dd*SEG_SPACING, y: last.y + ddy/dd*SEG_SPACING });
+        // respawn
+        pickups[i] = {
+          x: ARENA.l + 80 + Math.random()*(ARENA.r-ARENA.l-160),
+          y: ARENA.t + 80 + Math.random()*(ARENA.b-ARENA.t-160),
+          type: Math.random()<.15?'double':'normal',
+          t: Math.random()*Math.PI*2
+        };
+        scoreFlash = 0.15;
+        lastPickupTime = 0;
+        break;
+      }
+    }
+  }
+
+  // particles
+  for (const p of particles) { p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=0.9; p.vy*=0.9; p.life-=dt; }
+
+  // ── DRAW ──
+  draw();
+  updateHUD();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = C.black;
+  ctx.fillRect(0, 0, W, H);
+
+  // subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 60) { ctx.beginPath(); ctx.moveTo(x,ARENA.t); ctx.lineTo(x,ARENA.b); ctx.stroke(); }
+  for (let y = ARENA.t; y < ARENA.b; y += 60) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  // ghost segments (shed obstacles)
+  for (const g of ghosts) {
+    if (g.timer <= 0) continue;
+    const t = g.timer / g.maxTimer;
+    ctx.beginPath();
+    ctx.arc(g.x, g.y, 8, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(120,50,50,${t * 0.8})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(255,43,43,${t * 0.5})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // pickups
+  for (const p of pickups) {
+    const pulse = 0.5 + 0.5 * Math.sin(p.t);
+    const r = 7 + pulse * 2.5;
+    const isDouble = p.type === 'double';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.fillStyle = isDouble ? 'rgba(240,237,230,0.15)' : 'rgba(200,255,0,0.12)';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r - 2, 0, Math.PI*2);
+    ctx.fillStyle = C.black;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 2.5, 0, Math.PI*2);
+    ctx.fillStyle = isDouble ? C.white : C.acid;
+    ctx.fill();
+    // outer ring
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, 0, Math.PI*2);
+    ctx.strokeStyle = isDouble ? `rgba(240,237,230,${0.3 + pulse*0.4})` : `rgba(200,255,0,${0.3 + pulse*0.4})`;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+
+  // enemies
+  for (const e of enemies) {
+    if (e.type === 'chaser') {
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 9, 0, Math.PI*2);
+      ctx.fillStyle = '#ff2b2b';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 9, 0, Math.PI*2);
+      ctx.strokeStyle = 'rgba(255,43,43,0.3)';
+      ctx.lineWidth = 4;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, 5, 0, Math.PI*2);
+      ctx.fillStyle = '#0a0a0a';
+      ctx.fill();
+    } else {
+      // cutter — diamond
+      const r = 9;
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y-r);
+      ctx.lineTo(e.x+r, e.y);
+      ctx.lineTo(e.x, e.y+r);
+      ctx.lineTo(e.x-r, e.y);
+      ctx.closePath();
+      ctx.fillStyle = C.acid;
+      ctx.fill();
+      ctx.strokeStyle = '#0a0a0a';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+  }
+
+  // segment body (back to front)
+  const n = player.segs.length;
+  for (let i = n-1; i >= 0; i--) {
+    const s = player.segs[i];
+    const t = i / Math.max(1, n-1);  // 0=head-adjacent, 1=tail
+    const r_val = Math.round(200);
+    const g_val = Math.round(255 * (0.55 + (1-t)*0.45));
+    const alpha = 0.25 + (1-t) * 0.55;
+    const segR = 8 - t * 2;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, Math.max(3, segR), 0, Math.PI*2);
+    ctx.fillStyle = `rgba(${r_val},${g_val},0,${alpha})`;
+    ctx.fill();
+  }
+
+  // player head
+  ctx.beginPath();
+  ctx.arc(player.x, player.y, 10, 0, Math.PI*2);
+  ctx.fillStyle = C.white;
+  ctx.fill();
+  // direction pip
+  const pr = player.angle * Math.PI / 180;
+  const px2 = player.x + Math.cos(pr) * 6;
+  const py2 = player.y + Math.sin(pr) * 6;
+  ctx.beginPath();
+  ctx.arc(px2, py2, 3, 0, Math.PI*2);
+  ctx.fillStyle = C.black;
+  ctx.fill();
+
+  // particles
+  for (const p of particles) {
+    if (p.life <= 0) continue;
+    const t = p.life / p.maxLife;
+    const [r2,g2,b2] = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fillStyle = `rgba(${r2},${g2},${b2},${t})`;
+    ctx.fill();
+  }
+}
+
+function updateHUD() {
+  const n = player.segs.length;
+  document.getElementById('scoreVal').textContent = scoreDisp.toLocaleString();
+  document.getElementById('scoreVal').classList.toggle('flash', scoreFlash > 0);
+  document.getElementById('multBadge').textContent = `×${Math.max(1,n)}`;
+  document.getElementById('segCount').textContent = n;
+  document.getElementById('segCount').classList.toggle('danger', n >= 20);
+  document.getElementById('waveVal').textContent = String(Math.floor(elapsed/30)+1).padStart(2,'0');
+  const mins = Math.floor(elapsed/60), secs = Math.floor(elapsed%60);
+  document.getElementById('timeVal').textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
+
+  // shed bar
+  const fill = document.getElementById('shedFill');
+  const label = document.getElementById('shedLabel');
+  if (shedCD > 0) {
+    const pct = Math.round((1 - shedCD/shedMax)*100);
+    fill.style.width = pct + '%';
+    fill.classList.add('charging');
+    label.textContent = 'shed';
+    label.classList.remove('ready');
+  } else {
+    fill.style.width = '100%';
+    fill.classList.remove('charging');
+    label.textContent = n < 6 ? `shed (need ${6-n} more)` : 'shed ready';
+    label.classList.toggle('ready', n >= 6);
+  }
+
+  // danger
+  const ind = document.getElementById('dangerInd');
+  const border = document.getElementById('arenaBorder');
+  if (n >= 25) {
+    ind.textContent = 'danger: critical'; ind.className = 'danger-indicator high';
+    border.classList.add('danger');
+  } else if (n >= 14) {
+    ind.textContent = 'danger: high'; ind.className = 'danger-indicator med';
+    border.classList.remove('danger');
+  } else {
+    ind.textContent = 'danger: low'; ind.className = 'danger-indicator low';
+    border.classList.remove('danger');
+  }
+}
+
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
