@@ -1,5 +1,7 @@
 # BLOAT
 
+[https://corypearl.itch.io/bloat](https://corypearl.itch.io/bloat)
+
 An **arcade survival** game where your score isn’t a number — it’s a **physical body** that drags behind you, ruins your turning, and gives enemies more to hit.  
 The better you do, the worse it gets.
 
