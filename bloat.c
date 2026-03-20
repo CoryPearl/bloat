@@ -1,9 +1,21 @@
 // Made by Cory Pearl
 // Start date: 03/17/26
+// Version 3.0
+
 // Hours worked: 
-// 17 coding 
+// 22 coding 
 // 4 desigining 
 // 5 trying to complie to web asemmbley
+
+// TODO:
+// - Make gamestate struct
+// - Make active/inactive bool for bodys, enimies, cutbodys, and pickups struct
+
+// IDEAS:
+// - A third enemy type that bounces off walls instead of homing
+
+// Remember:
+// - 
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,17 +27,10 @@
 #define MAX_BODYS 99
 #define MAX_CUT_BODYS 99
 #define MAX_PICKUPS 100
-#define MAX_ENIMIES 20
+#define MAX_ENIMIES 100
 #define HISTORY_SIZE 1000
 #define BASE_SPEED 125
 #define BASE_TURN_SPEED 5
-
-// TODO in order:s
-// - If enimimie hits body enimie dies?
-// - Win if get to wave 100
-
-// Remember:
-// - Jittering of player
 
 typedef struct {
     float x;
@@ -38,8 +43,12 @@ typedef struct {
     float theta;
     float speed;
     float turnSpeed;
+    Color color;
     int size;
     bool shedReady;
+    float speedBoostTimer;
+    float freezeTimer;
+    float scoreMultiplierTimer;
 } Player;
 
 typedef struct {
@@ -62,6 +71,7 @@ typedef struct {
     float y;
     float r;
     bool growing;
+    int kind;
 } Pickup;
 
 typedef struct {
@@ -71,35 +81,82 @@ typedef struct {
     float r;
     float theta;
     int targetIndex;
+    int type;
     Color color;
 } Enimie;
 
 float randomRange(float n1, float n2) {
-    return n1 + ((float)rand() / RAND_MAX) * (n2 - n1);
+    return n1 + ((float)rand() / (float)RAND_MAX) * (n2 - n1);
 }
 
 float distance(float x1, float y1, float x2, float y2) {
     return ((x2 - x1) * (x2 - x1)) + ((y2 - y1) * (y2 - y1));
 }
 
-void updateClock(float *ticksAlive, float *timeAlive, float *ticksSinceShed, float *timeSinceShed, float *fps, bool *shedReady, Player *player ) { // Updating clock
+float distanceWithRadius(float x1, float y1, float x2, float y2, int r1, int r2) {
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float radiusSum = r1 + r2;
+
+    return (dx * dx + dy * dy) - (radiusSum * radiusSum);
+}
+
+void updateClock(float *ticksAlive, float *timeAlive, float *ticksSinceShed, float *timeSinceShed, float *fps, bool *shedReady, Player *player, bool speedBoost) {
     *ticksAlive += 1;
     *timeAlive = *ticksAlive / *fps;
 
-    if ( !*shedReady) {
+    if (!*shedReady) {
         *ticksSinceShed += 1;
         *timeSinceShed = *ticksSinceShed / *fps;
     }
 
-    if ( *timeSinceShed > 4) {
+    if (*timeSinceShed > 4 && !speedBoost) {  // only reset if no boost active
         player->speed = BASE_SPEED;
     }
 
-    if ( *timeSinceShed > 4 && !*shedReady && player->size >= 6) {
+    if (*timeSinceShed > 4 && !*shedReady && player->size >= 6) {
         *shedReady = true;
         player->shedReady = true;
     }
+}
 
+void updateBoostTimers(Player *player, bool *speedBoost, bool *freeze, bool *scoreMultiplier, Enimie *enimies, float dt) {
+    // Speed boost
+    if (*speedBoost) {
+        player->speedBoostTimer -= dt;
+        if (player->speedBoostTimer <= 0) {
+            *speedBoost = false;
+            player->speedBoostTimer = 0;
+            player->speed = BASE_SPEED;
+        }
+    }
+
+    // Freeze
+    if (*freeze) {
+        player->freezeTimer -= dt;
+        for (int i = 0; i < MAX_ENIMIES; i++) {
+            if (enimies[i].x != 0) enimies[i].speed = 0;
+        }
+        if (player->freezeTimer <= 0) {
+            *freeze = false;
+            player->freezeTimer = 0;
+            // Change back enemy speeds
+            for (int i = 0; i < MAX_ENIMIES; i++) {
+                if (enimies[i].x != 0) {
+                    enimies[i].speed = 100 - (enimies[i].r * 3);
+                }
+            }
+        }
+    }
+
+    // Score multiplier
+    if (*scoreMultiplier) {
+        player->scoreMultiplierTimer -= dt;
+        if (player->scoreMultiplierTimer <= 0) {
+            *scoreMultiplier = false;
+            player->scoreMultiplierTimer = 0;
+        }
+    }
 }
 
 bool checkCollision(float x1, float y1, float x2, float y2, int r1, int r2 ) {
@@ -109,7 +166,7 @@ bool checkCollision(float x1, float y1, float x2, float y2, int r1, int r2 ) {
     return dSquared <= rSumSquared;
 }
 
-void drawStartScreen(int screenWidth, int screenHeight, int margin, int gameWidth, int gameHeight, bool *gameStart, Color BACKGROUND, Color ACCENT, float *startMenuTitleOffset, bool *startMenuTitleGrowing, bool *suppressSpaceToPlay, Texture2D soundImg, float soundRotation) {
+void drawStartScreen(int screenWidth, int screenHeight, int margin, int gameWidth, int gameHeight, bool *gameStart, Color BACKGROUND, Color ACCENT, float *startMenuTitleOffset, bool *startMenuTitleGrowing, bool *suppressSpaceToPlay, Texture2D soundImg, float soundRotation, int *colorPickedIndex, Player *player) {
     /* Same Space press that left game-over must not immediately start a new run */
     if (*suppressSpaceToPlay) {
         *suppressSpaceToPlay = false;
@@ -162,6 +219,26 @@ void drawStartScreen(int screenWidth, int screenHeight, int margin, int gameWidt
     DrawText("R", 258, gameHeight - 25, 15, LIGHTGRAY);
     DrawText("RESTART", 240, gameHeight , 10, LIGHTGRAY);
 
+    Color colors[6] = {
+        (Color){255, 28, 39,255},
+        (Color){230,103,0,255},
+        (Color){245,221,0,255},
+        (Color){120,199,68,255},
+        (Color){0,155,245,255},
+        (Color){245,98,196,255}
+    };
+
+    player->color = colors[*colorPickedIndex];
+
+    Rectangle rect5 = {screenWidth - 95, 8, 25, 25};
+    DrawRectangleLinesEx(rect5, 2, DARKGRAY);
+    DrawText("<-", screenWidth - 90, 11, 20, LIGHTGRAY);
+
+    DrawRectangle(screenWidth - 65, 8, 25, 25, player->color);
+
+    Rectangle rect6 = {screenWidth - 35, 8, 25, 25};
+    DrawRectangleLinesEx(rect6, 2, DARKGRAY);
+    DrawText("->", screenWidth - 30, 11, 20, LIGHTGRAY);
 
     // Bouncing text
     float speed = 25.0f; // pixels per second
@@ -190,7 +267,7 @@ void drawStartScreen(int screenWidth, int screenHeight, int margin, int gameWidt
 
 }
 
-void drawGameScreen(int screenWidth, int screenHeight, int margin, int gameWidth, int gameHeight, int cellSize, int score, int wave, float timeAlive, float timeSinceShed, bool shedReady, Player player, Color BACKGROUND, Color GRID_LINES, Color ACCENT, Pickup *pickups, int pickupCount, Body *bodys, int *historyIndex, Vec2 *history, Cutbody *cutbodys, Enimie *enimies) {    
+void drawGameScreen(int screenWidth, int screenHeight, int margin, int gameWidth, int gameHeight, int cellSize, int score, int wave, float timeAlive, float timeSinceShed, bool shedReady, Player player, Color BACKGROUND, Color GRID_LINES, Color ACCENT, Pickup *pickups, int pickupCount, Body *bodys, int *historyIndex, Vec2 *history, Cutbody *cutbodys, Enimie *enimies, bool speedBoost, bool scoreMultiplier, bool freeze) {    
     ClearBackground(BACKGROUND);
 
     // Vertical lines
@@ -240,7 +317,56 @@ void drawGameScreen(int screenWidth, int screenHeight, int margin, int gameWidth
 
     // ESC to pause
     // int escWidth = MeasureText("| ESC | pause", 15);
-    DrawText("[ ESC ]  pause", gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 10, 15, DARKGRAY);
+    DrawText("[ ESC ]  pause", gameWidth - MeasureText("[ ESC ] pause", 15) - 13, margin / 2 + 10, 15, DARKGRAY);
+
+    // Draw powerup timers
+    // case 1:
+    //     color = (Color){255, 119, 0, 255};
+    //     break;
+    // case 2:
+    //     color = (Color){255, 48, 238, 255};
+    //     break;
+    // case 3:
+    //     color = (Color){52, 235, 222, 255};
+    //     break;
+    // }
+
+    int activePowerUps = 0;
+    if (speedBoost) activePowerUps += 1;
+    if (scoreMultiplier) activePowerUps += 1;
+    if (freeze) activePowerUps += 1;
+
+    int offsetMargin = 0;
+
+    // activePowerUps = 3;
+    // speedBoost = true;
+    // scoreMultiplier = true;
+    // freeze = true;
+
+    if (activePowerUps > 0) {
+        
+        if (speedBoost) {
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), MeasureText("[ ESC ] pause", 15) + 5, 6, DARKGRAY);
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), player.speedBoostTimer / 4.0f * (MeasureText("[ ESC ] pause", 15) + 5), 6, (Color){255, 119, 0, 255});
+            DrawText("SPEED", gameWidth - MeasureText("[ ESC ] pause", 10) - MeasureText("SPEED",10) * 3 + 5, margin / 2 + 28 + (offsetMargin * 25), 15, (Color){255, 119, 0, 255});
+            offsetMargin += 1;
+        }
+
+        if (scoreMultiplier) {
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), MeasureText("[ ESC ] pause", 15) + 5, 6, DARKGRAY);
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), player.scoreMultiplierTimer/ 8.0f * (MeasureText("[ ESC ] pause", 15) + 5), 6, (Color){255, 48, 238, 255});
+            DrawText("10 X SCORE", gameWidth - MeasureText("[ ESC ] pause", 10) - MeasureText("10X SCORE",10) * 2 - 20, margin / 2 + 28 + (offsetMargin * 25), 15, (Color){255, 48, 238, 255});
+
+            offsetMargin += 1;
+        }
+
+        if (freeze) {
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), MeasureText("[ ESC ] pause", 15) + 5, 6, DARKGRAY);
+            DrawRectangle(gameWidth - MeasureText("[ ESC ] pause", 15) - 10, margin / 2 + 30 + (offsetMargin * 25), player.freezeTimer / 2.0f * (MeasureText("[ ESC ] pause", 15) + 5), 6, (Color){52, 235, 222, 255});
+            DrawText("FREEZE", gameWidth - MeasureText("[ ESC ] pause", 10) - MeasureText("FREEZE",10) * 2 - 23, margin / 2 + 28 + (offsetMargin * 25), 15, (Color){52, 235, 222, 255});
+        }
+
+    }
 
     // Border box
     Rectangle rect = {1, margin / 2, gameWidth - 2, gameHeight};
@@ -282,27 +408,54 @@ void drawGameScreen(int screenWidth, int screenHeight, int margin, int gameWidth
     DrawCircle(player.x, player.y, 15, LIGHTGRAY);
     // Direction x = speed * cos(theta)
     // Direction y = speed * sin(theta)
-    DrawCircle(player.x + (cosf(player.theta) * 7.5), player.y + (sinf(player.theta) * 7.5), 5, BLACK);
+    // DrawCircle(player.x + (cosf(player.theta) * 7.5), player.y + (sinf(player.theta) * 7.5), 5, BLACK);
+
+    Vector2 headPosition = { player.x, player.y };
+    DrawCircleV(headPosition, 15, LIGHTGRAY);
+
+    Vector2 pipPosition = {
+        player.x + cosf(player.theta) * 7.5f,
+        player.y + sinf(player.theta) * 7.5f
+    };
+    DrawCircleV(pipPosition, 5, BLACK);
 
     // Draw pickups 
     for (int i = 0; i < MAX_PICKUPS; i++) {
         if (pickups[i].x != 0 && pickups[i].y != 0) {
-            DrawCircle(pickups[i].x, pickups[i].y, 5, ACCENT);
-            DrawCircleLines(pickups[i].x, pickups[i].y, pickups[i].r, ACCENT);
+            Color color = ACCENT;
+
+            if (pickups[i].kind != 0) {
+                switch (pickups[i].kind) {
+                    case 1:
+                        color = (Color){255, 119, 0, 255};
+                        break;
+                    case 2:
+                        color = (Color){255, 48, 238, 255};
+                        break;
+                    case 3:
+                        color = (Color){52, 235, 222, 255};
+                        break;
+                }
+            }
+
+            DrawCircle(pickups[i].x, pickups[i].y, 5, color);
+            DrawCircleLines(pickups[i].x, pickups[i].y, pickups[i].r, color);
         }
     }
 
     // Draw bodys
     for (int i = 0; i < MAX_BODYS; i++) {
         if (bodys[i].x != 0 && bodys[i].y != 0) {
-            DrawCircle(bodys[i].x, bodys[i].y, bodys[i].r, bodys[i].color);
+            // DrawCircle(bodys[i].x, bodys[i].y, bodys[i].r, bodys[i].color);
+            DrawCircleV((Vector2){ bodys[i].x, bodys[i].y }, bodys[i].r, bodys[i].color); // Fix jitter
         }
     }
 
     // Draw cut bodys
     for (int i = 0; i < MAX_CUT_BODYS; i++) {
         if (cutbodys[i].x != 0 && cutbodys[i].y != 0) {
-            DrawCircle(cutbodys[i].x, cutbodys[i].y, cutbodys[i].r, cutbodys[i].color);
+            // DrawCircle(cutbodys[i].x, cutbodys[i].y, cutbodys[i].r, cutbodys[i].color);
+            DrawCircleV((Vector2){ cutbodys[i].x, cutbodys[i].y }, cutbodys[i].r, cutbodys[i].color); // Fix jitter
         }
     }
 
@@ -336,6 +489,23 @@ void drawRestartScreen(int screenWidth, int screenHeight, Color ACCET, int score
     DrawRectangle(0, 0, screenWidth, screenHeight, dimmer);
 
     DrawText("YOU LOSE", screenWidth/2 - MeasureText("YOU LOSE", 70) / 2, screenHeight / 2 - 150, 70, ACCET);
+    DrawText(TextFormat("FINAL LENGTH %i", length), screenWidth / 2 - MeasureText(TextFormat("FINAL LENGTH %i", length), 30) / 2, screenHeight / 2 - 80, 30, LIGHTGRAY);
+    DrawText(TextFormat("MAX LENGTH %i", maxLength), screenWidth / 2 - MeasureText(TextFormat("MAX LENGTH %i", maxLength), 30) / 2, screenHeight / 2 - 40, 30, LIGHTGRAY);
+    DrawText(TextFormat("FINAL TIME %.2f", time), screenWidth / 2 - MeasureText(TextFormat("FINAL TIME %.2f", time), 30) / 2, screenHeight / 2, 30, LIGHTGRAY);
+    DrawText(TextFormat("FINAL SCORE %i", score), screenWidth / 2 - MeasureText(TextFormat("FINAL SCORE %i", score), 30) / 2, screenHeight / 2 + 40, 30, LIGHTGRAY);
+    DrawText(TextFormat("FINAL WAVE %i", wave), screenWidth / 2 - MeasureText(TextFormat("FINAL WAVE %i", wave), 30) / 2, screenHeight / 2 + 80, 30, LIGHTGRAY);
+
+    DrawText("PRESS R TO RESTART", screenWidth / 2 - MeasureText("PRESS R TO RESTART", 20) / 2, screenHeight / 2 + 160, 20, LIGHTGRAY);
+    DrawText("OR", screenWidth / 2 - MeasureText("OR", 20) / 2, screenHeight / 2 + 190, 20, LIGHTGRAY);
+    DrawText("SPACE TO RETURN TO MAIN MENU", screenWidth / 2 - MeasureText("SPACE TO RETURN TO MAIN MENU", 20) / 2, screenHeight / 2 + 220, 20, LIGHTGRAY);
+
+}
+
+void drawWinScreen(int screenWidth, int screenHeight, Color ACCET, int score, int wave, float time, int length, int maxLength) {
+    Color dimmer = (Color){0, 0, 0, 100};
+    DrawRectangle(0, 0, screenWidth, screenHeight, dimmer);
+
+    DrawText("YOU WIN", screenWidth/2 - MeasureText("YOU WIN", 70) / 2, screenHeight / 2 - 150, 70, ACCET);
     DrawText(TextFormat("FINAL LENGTH %i", length), screenWidth / 2 - MeasureText(TextFormat("FINAL LENGTH %i", length), 30) / 2, screenHeight / 2 - 80, 30, LIGHTGRAY);
     DrawText(TextFormat("MAX LENGTH %i", maxLength), screenWidth / 2 - MeasureText(TextFormat("MAX LENGTH %i", maxLength), 30) / 2, screenHeight / 2 - 40, 30, LIGHTGRAY);
     DrawText(TextFormat("FINAL TIME %.2f", time), screenWidth / 2 - MeasureText(TextFormat("FINAL TIME %.2f", time), 30) / 2, screenHeight / 2, 30, LIGHTGRAY);
@@ -389,10 +559,12 @@ void shed(Player *player, float *ticksSinceShed, float *timeSinceShed, bool *she
     }
 }
 
-void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeSinceShed, bool *shedReady, int gameWidth, int gameHeight, int margin, Pickup *pickups, int *pickupCount, int *wave, int *score, Body *bodys, int *historyIndex, Vec2 *history, Cutbody *cutbodys, int *cutbodyIndex, bool *paused, bool *lost, Enimie *enimies, Sound pickupWav, Sound shedWav) { 
+void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeSinceShed, bool *shedReady, int gameWidth, int gameHeight, int margin, Pickup *pickups, int *pickupCount, int *wave, int *score, Body *bodys, int *historyIndex, Vec2 *history, Cutbody *cutbodys, int *cutbodyIndex, bool *paused, bool *lost, Enimie *enimies, Sound pickupWav, Sound shedWav, bool *won, bool *speedBoost, bool *scoreMultiplier, bool *freeze) { 
     float dt = GetFrameTime();
 
-    float currentTurnSpeed = BASE_TURN_SPEED / (1.0f + (player->size - 1) * 0.15f);
+    updateBoostTimers(player, speedBoost, freeze, scoreMultiplier, enimies, dt);
+
+    float currentTurnSpeed = BASE_TURN_SPEED / (1.0f + (player->size - 1) * 0.12f);
 
     // Check if any keys are down
     if (IsKeyDown(KEY_RIGHT) || IsKeyDown(KEY_D)) player->theta += currentTurnSpeed * dt;
@@ -444,12 +616,35 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
                 pickups[i].x = 0;
                 pickups[i].y = 0;
                 pickups[i].r = 5;
-                *pickupCount -= 1;
-                *score += player->size * 10;
-                player->size += 1;
-                // player->turnSpeed = BASE_TURN_SPEED - (player->size / 3);
+                if (pickups[i].kind == 0) {
+                    *pickupCount -= 1;
+                    // *score += player->size * 10;s
+                    *score += player->size * 10 * (*scoreMultiplier ? 10 : 1);
+                    player->size += 1;
+                } else {
+                // speed boost : 3 seconds
+                // freez : 2 seconds
+                // score multiplier : 8 seconds
+                // Add visual display with same color that pcikup was
+                    switch (pickups[i].kind) {
+                        case 1:
+                            *speedBoost = true;
+                            player->speed = 200;
+                            player->speedBoostTimer = 4.0f;
+                            break;
+                        case 2:
+                            *scoreMultiplier = true;
+                            player->scoreMultiplierTimer = 8.0f;
+                            break;
+                        case 3:
+                            *freeze = true;
+                            player->freezeTimer = 2.0f;
+                            break;
+                    }
+                }
                 PlaySound(pickupWav);
             }
+                // player->turnSpeed = BASE_TURN_SPEED - (player->size / 3);
         }
     }
 
@@ -459,16 +654,50 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
         *wave += 1;
         if (*wave == 100) {
             *paused = true;
+            *won = true;
         }
-        *pickupCount = *wave;
 
         player->speed = BASE_SPEED + *wave;
 
-        for (int i = 0; i < *wave; i++) {
+        // Random but also ramping up enimie count
+        int base1 = 2 + (*wave / 2);
+        int var1 = randomRange(0, (int)sqrt(*wave));
+
+        int pcikupCountRand = base1 + var1;
+
+        *pickupCount = pcikupCountRand;
+
+        for (int i = 0; i < pcikupCountRand; i++) {
             pickups[i].x = randomRange(17, gameWidth);
             pickups[i].y = randomRange(17, gameHeight - margin) + margin / 2;
             pickups[i].r = 5;
             pickups[i].growing = true;
+
+            int kind = 0;
+
+            float randKind = randomRange(1,100);
+            
+            // randKind > 1.0f && randKind < 70.0f) stay normal
+            // 1 = speed boost, 2 = score mmultiplier, 3 == freeze
+            if (*wave > 3) {
+                if (randKind > 87.5f && randKind < 92.5f){
+                    kind = 1;
+                    *pickupCount -= 1;
+                } else if (randKind > 92.5f && randKind < 97.5f) {
+                    kind = 2;
+                    *pickupCount -= 1;
+                } else if (randKind > 97.5f && randKind < 100.0f) {
+                    kind = 3;
+                    *pickupCount -= 1;
+                }
+            }
+
+            pickups[i].kind = kind;
+
+            while (checkCollision(pickups[i].x, pickups[i].y, player->x, player->y, 5, 15)) {
+                pickups[i].x = randomRange(17, gameWidth);
+                pickups[i].y = randomRange(17, gameHeight - margin) + margin / 2;
+            }
         }
 
         for (int i = 0; i < MAX_ENIMIES; i++) {
@@ -476,13 +705,36 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
             enimies[i].y= 0;
         }
 
-        for (int i = 0; i < randomRange(1, *wave); i++) {
+        // Random but also ramping up enimie count
+        int base = 2 + (*wave / 2);
+        int var = randomRange(0, (int)sqrt(*wave));
+
+        int enemyCount = base + var;
+
+        // Spawning random enimies
+        for (int i = 0; i < enemyCount; i++) {
+
             enimies[i].x = randomRange(17, gameWidth);
             enimies[i].y = randomRange(17, gameHeight - margin) + margin / 2;
             // enimies[i].r = 10;
             enimies[i].r = randomRange(4,14);
             enimies[i].speed = 100 - (enimies[i].r * 3);
-            
+            enimies[i].type = 0;
+            enimies[i].color = (Color){255, 59, 59, 255};
+
+            while (checkCollision(enimies[i].x, enimies[i].y, player->x, player->y, enimies[i].r, 15) && distanceWithRadius(enimies[i].x, enimies[i].y, player->x, player->y, enimies[i].r, 15) > 200) {
+                enimies[i].x = randomRange(17, gameWidth);
+                enimies[i].y = randomRange(17, gameHeight - margin) + margin / 2;
+            }
+
+            float randEnimie = randomRange(1,100);
+
+            if (randEnimie > 80.0f && randEnimie < 100.0f) {
+                enimies[i].type = 1;
+                enimies[i].color = (Color){3, 0, 158, 255};
+                enimies[i].speed *= 1.75;
+                enimies[i].theta = randomRange(1,360);
+            }
         }
     }
 
@@ -494,16 +746,16 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
 
     float shrinkage = 1.01f;
 
-    int offset = 0;
+    float offset = 0.0f;
 
     float baseAlpha = 255.0f;
     float currentAlpha = baseAlpha;
 
     for (int i = 0; i < player->size - 1; i++) {
 
-        offset += (int)currentSpacing;
+        offset += currentSpacing;
 
-        int index = *historyIndex - offset;
+        int index = *historyIndex - (int)offset;
         if (index < 0) index += HISTORY_SIZE;
 
         bodys[i].x = history[index].x;
@@ -517,7 +769,7 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
 
         currentAlpha /= shrinkage;
 
-        bodys[i].color = (Color){ 120, 199, 68, (unsigned char)currentAlpha };
+       bodys[i].color = (Color){ player->color.r, player->color.g, player->color.b, (unsigned char)currentAlpha };
 
         currentSpacing /= shrinkage;
 
@@ -564,34 +816,98 @@ void updateEntitiesAndValues(Player *player, float *ticksSinceShed, float *timeS
     }
 
     // Enemies chase nearest point: head and/or tail segments (bodys updated above)
+    int targetCounts[MAX_BODYS] = {0};
+
     for (int i = 0; i < MAX_ENIMIES; i++) {
         if (enimies[i].x == 0 || enimies[i].y == 0) continue;
 
         float tx = player->x;
         float ty = player->y;
         float minDist = distance(enimies[i].x, enimies[i].y, tx, ty);
-        int bestSeg = -1; /* -1 = targeting head */
+        int bestSeg = -1; // -1 = targeting head //
+
+        int maxPerSegment = 1;
+
+        // for (int j = 0; j < player->size - 1; j++) {
+        //     float d = distance(enimies[i].x, enimies[i].y, bodys[j].x, bodys[j].y);
+        //     if (d < minDist) {
+        //         minDist = d;
+        //         tx = bodys[j].x;
+        //         ty = bodys[j].y;
+        //         bestSeg = j;
+        //     }
+        // }
 
         for (int j = 0; j < player->size - 1; j++) {
+            // skip if this segment allready has a enimie
+            if (targetCounts[j] >= maxPerSegment) continue;
+
             float d = distance(enimies[i].x, enimies[i].y, bodys[j].x, bodys[j].y);
+
             if (d < minDist) {
                 minDist = d;
-                tx = bodys[j].x;
-                ty = bodys[j].y;
                 bestSeg = j;
             }
         }
 
-        enimies[i].targetIndex = bestSeg;
+        if (bestSeg != -1) {
+            targetCounts[bestSeg]++;
+            tx = bodys[bestSeg].x;
+            ty = bodys[bestSeg].y;
+        } else {
+            // fallback: target head
+            tx = player->x;
+            ty = player->y;
+        }
 
-        float dx = tx - enimies[i].x;
-        float dy = ty - enimies[i].y;
-        enimies[i].theta = atan2f(dy, dx);
+        if (enimies[i].type == 0) {
+            enimies[i].targetIndex = bestSeg;
 
-        float evx = cosf(enimies[i].theta);
-        float evy = sinf(enimies[i].theta);
-        enimies[i].x += evx * enimies[i].speed * dt;
-        enimies[i].y += evy * enimies[i].speed * dt;
+            float dx = tx - enimies[i].x;
+            float dy = ty - enimies[i].y;
+            enimies[i].theta = atan2f(dy, dx);
+
+            // Might not need this?
+            // float dHead = distance(enimies[i].x, enimies[i].y, player->x, player->y);
+
+            // if (dHead < minDist) {
+            //     dx = tx - enimies[i].x;
+            //     dy = ty - enimies[i].y;
+            //     enimies[i].theta = atan2f(dy, dx);
+            // }
+
+            // Math to clculate direction and speed for enimies to travel in
+            float evx = cosf(enimies[i].theta);
+            float evy = sinf(enimies[i].theta);
+            enimies[i].x += evx * enimies[i].speed * dt;
+            enimies[i].y += evy * enimies[i].speed * dt;
+        } else if (enimies[i].type == 1) {
+            float evx = cosf(enimies[i].theta);
+            float evy = sinf(enimies[i].theta);
+            enimies[i].x += evx * enimies[i].speed * dt * 1.75;
+            enimies[i].y += evy * enimies[i].speed * dt * 1.75;
+
+            // Left wall
+            if (enimies[i].x < 0 + enimies[i].r) {
+                enimies[i].x = 0 + enimies[i].r;
+                enimies[i].theta = randomRange(-M_PI / 2, M_PI / 2);
+            }
+            // Right wall
+            if (enimies[i].x > gameWidth - enimies[i].r) {
+                enimies[i].x = gameWidth - enimies[i].r;
+                enimies[i].theta = randomRange(M_PI / 2, 3 * M_PI / 2);
+            }
+            // Top wall
+            if (enimies[i].y < margin / 2 + enimies[i].r) {
+                enimies[i].y = margin / 2 + enimies[i].r;
+                enimies[i].theta = randomRange(0, M_PI);
+            }
+            // Bottom wall
+            if (enimies[i].y > gameHeight + margin / 2 - enimies[i].r) {
+                enimies[i].y = gameHeight + margin / 2 - enimies[i].r;
+                enimies[i].theta = randomRange(-M_PI, 0);
+            }
+        }
 
         if (checkCollision(player->x, player->y, enimies[i].x, enimies[i].y, 15, enimies[i].r)) {
             *lost = true;
@@ -609,6 +925,9 @@ void restart(int screenWidth, int screenHeight, Player *player, Pickup *pickups,
     player->speed = BASE_SPEED; // Speed in pixels per second
     player->size = 1;
     player->shedReady = false;
+    player->speedBoostTimer = 0.0f;
+    player->freezeTimer = 0.0f;
+    player->scoreMultiplierTimer = 0.0f;
 
     for (int i = 0; i < MAX_PICKUPS; i++) {
         pickups[i].x = 0;
@@ -638,6 +957,7 @@ void restart(int screenWidth, int screenHeight, Player *player, Pickup *pickups,
         enimies[i].y = 0;
         enimies[i].r = 10;
         enimies[i].color = (Color){255, 59, 59, 255};
+        enimies[i].type = 0;
     }
 
     *score = 0;
@@ -676,6 +996,8 @@ int main() {
     Color const ACCENT = {211,254,81,255};
     Color const GRID_LINES = {20,20,20,255};
 
+    int colorPickedIndex = 3;
+
     Player player;
     player.x = (float)screenWidth / 2;
     player.y = (float)screenHeight /2;
@@ -684,6 +1006,10 @@ int main() {
     player.speed = BASE_SPEED; // Speed in pixels per second
     player.size = 1;
     player.shedReady = false;
+    player.speedBoostTimer = 0.0f;
+    player.freezeTimer = 0.0f;
+    player.scoreMultiplierTimer = 0.0f;
+    player.color = (Color){120,199,68,255};
 
     Pickup pickups[MAX_PICKUPS]; // Max pickups 100, (wave 100 you beat the game)
 
@@ -692,6 +1018,7 @@ int main() {
         pickups[i].y = 0;
         pickups[i].r = 5;
         pickups[i].growing = true;
+        pickups[i].kind = 0;
     }
 
     Body bodys[MAX_BODYS]; // Max bodys 100, (body 100 you beat the game)
@@ -723,6 +1050,7 @@ int main() {
         enimies[i].y = 0;
         enimies[i].r = 10;
         enimies[i].color = (Color){255, 59, 59, 255};
+        enimies[i].type = 0;
     }
 
     enimies[0].x = 100;
@@ -745,6 +1073,10 @@ int main() {
     bool paused = false;
     bool escPressedLastFrame = false;
     bool lost = false;
+    bool won = false;
+    bool speedBoost = false;
+    bool freeze = false;
+    bool scoreMultiplier = false;
 
     float startMenuTitleOffset = 0;
     bool startMenuTitleGrowing = true;
@@ -851,18 +1183,20 @@ int main() {
             if (!paused) {
                 updateEntitiesAndValues(&player, &ticksSinceShed, &timeSinceShed, &shedReady,
                     gameWidth, gameHeight, margin, pickups, &pickupCount, &wave, &score,
-                    bodys, &historyIndex, history, cutbodys, &cutbodyIndex, &paused, &lost, enimies, pickupWav, shedWav);
+                    bodys, &historyIndex, history, cutbodys, &cutbodyIndex, &paused, &lost, enimies, pickupWav, shedWav, &won, &speedBoost, &scoreMultiplier, &freeze);
                     
-                updateClock(&ticksAlive, &timeAlive, &ticksSinceShed, &timeSinceShed, &fps, &shedReady, &player);
+                updateClock(&ticksAlive, &timeAlive, &ticksSinceShed, &timeSinceShed, &fps, &shedReady, &player, speedBoost);
             }
 
             drawGameScreen(screenWidth, screenHeight, margin, gameWidth, gameHeight, cellSize,
                 score, wave, timeAlive, timeSinceShed, shedReady, player, BACKGROUND,
-                GRID_LINES, ACCENT, pickups, pickupCount, bodys, &historyIndex, history, cutbodys, enimies);
+                GRID_LINES, ACCENT, pickups, pickupCount, bodys, &historyIndex, history, cutbodys, enimies, speedBoost, scoreMultiplier, freeze);
 
             if (paused) {
                 if (lost) {
                     drawRestartScreen(screenWidth, screenHeight, ACCENT, score, wave, timeAlive, player.size, maxLength);
+                } else if (won) {
+                    drawWinScreen(screenWidth, screenHeight, ACCENT, score, wave, timeAlive, player.size, maxLength);
                 } else {
                     drawPausedScreen(screenWidth, screenHeight);
                 }
@@ -871,7 +1205,18 @@ int main() {
             UpdateMusicStream(gameMusic);
 
         } else {
-            drawStartScreen(screenWidth, screenHeight, margin, gameWidth, gameHeight, &gameStart, BACKGROUND, ACCENT, &startMenuTitleOffset, &startMenuTitleGrowing, &suppressSpaceToPlay, soundImgTecture, soundRotation);
+            if(IsKeyPressed(KEY_RIGHT)) colorPickedIndex += 1;
+            if(IsKeyPressed(KEY_LEFT)) colorPickedIndex -= 1;
+
+            if (colorPickedIndex < 0) {
+                colorPickedIndex = 5;
+            }
+
+            if (colorPickedIndex > 5) {
+                colorPickedIndex = 0;
+            }
+
+            drawStartScreen(screenWidth, screenHeight, margin, gameWidth, gameHeight, &gameStart, BACKGROUND, ACCENT, &startMenuTitleOffset, &startMenuTitleGrowing, &suppressSpaceToPlay, soundImgTecture, soundRotation, &colorPickedIndex, &player);
             UpdateMusicStream(menuMusic);
         }
 
