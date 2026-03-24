@@ -8,6 +8,7 @@
 // 5 trying to complie to web asemmbley
 
 // TODO:
+// - Boost pickup sounds
 // - Make gamestate struct
 // - Make active/inactive bool for bodys, enimies, cutbodys, and pickups struct
 
