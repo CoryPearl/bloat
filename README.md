@@ -8,6 +8,15 @@ The better you do, the worse it gets.
 - **Jam theme**: Growing
 - **Made by**: Cory Pearl
 
+**Results**
+| Criteria | Rank | Score |
+|----------|------|-------|
+| Idea Execution | #1 | 4.462 |
+| Fun Factor | #3 | 4.154 |
+| Effort | #3 | 4.462 |
+| Creativity | #23 | 3.769 |
+| Innovation | #33 | 3.231 |
+
 ### How to play
 
 - **Turn**: `A/D` or `←/→`
