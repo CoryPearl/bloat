@@ -16,6 +16,7 @@ The better you do, the worse it gets.
 | Effort | #3 | 4.462 |
 | Creativity | #23 | 3.769 |
 | Innovation | #33 | 3.231 |
+| Overal | #4 | 4.061 |
 
 ### How to play
 
